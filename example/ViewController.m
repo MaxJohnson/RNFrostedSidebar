@@ -17,7 +17,13 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+	
     self.optionIndices = [NSMutableIndexSet indexSetWithIndex:1];
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+	return UIStatusBarStyleLightContent;
 }
 
 - (IBAction)onBurger:(id)sender {
