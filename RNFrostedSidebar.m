@@ -27,6 +27,8 @@
 
 - (void)drawRect:(CGRect)rect
 {
+	if (!self.parentTarget) return;
+	
 	CGFloat blurRadius = self.blurRadius;
 	CGFloat saturationDeltaFactor = self.saturationDeltaFactor;
 	UIColor *tintColor = self.tintColor;
@@ -260,14 +262,35 @@ static RNFrostedSidebar *rn_frostedMenu;
 - (void)viewDidLoad
 {
 	[super viewDidLoad];
+	
+	CGRect contentFrame = self.view.bounds;
+	contentFrame.size.width = _width;
+	contentFrame.origin.x = _showFromRight ? contentFrame.size.width - _width : 0;
+	
+	UIViewAutoresizing autoresizing = UIViewAutoresizingFlexibleHeight | (_showFromRight ? UIViewAutoresizingFlexibleLeftMargin : UIViewAutoresizingFlexibleRightMargin);
+	
+	RNBlurredView *blur = [[RNBlurredView alloc] initWithFrame:contentFrame];
+	blur.blurRadius = 5;
+	blur.tintColor = self.tintColor;
+	blur.saturationDeltaFactor = 1.8;
+	blur.contentMode = _showFromRight ? UIViewContentModeTopRight : UIViewContentModeTopLeft;
+	blur.autoresizingMask = autoresizing;
+	[self.view addSubview:blur];
+	self.blurView = blur;
+	
+	UIView *clip = [[UIView alloc] initWithFrame:blur.bounds];
+	clip.backgroundColor = [UIColor blackColor];
+	blur.layer.mask = clip.layer;
+	self.blurClipView = clip;
 
-	UIScrollView *contentView = [[UIScrollView alloc] init];
+	UIScrollView *contentView = [[UIScrollView alloc] initWithFrame:contentFrame];
 	contentView.alwaysBounceHorizontal = NO;
 	contentView.alwaysBounceVertical = YES;
 	contentView.bounces = YES;
 	contentView.clipsToBounds = NO;
 	contentView.showsHorizontalScrollIndicator = NO;
 	contentView.showsVerticalScrollIndicator = NO;
+	contentView.autoresizingMask = autoresizing;
 	[self.view addSubview:contentView];
 	self.contentView = contentView;
 
@@ -351,45 +374,25 @@ static RNFrostedSidebar *rn_frostedMenu;
     [controller.view addSubview:self.view];
     [self didMoveToParentViewController:controller];
     
-    CGFloat parentWidth = self.view.bounds.size.width;
-    
-    CGRect contentFrame = self.view.bounds;
-    contentFrame.origin.x = _showFromRight ? parentWidth : -_width;
-    contentFrame.size.width = _width;
-    self.contentView.frame = contentFrame;
-    
     [self layoutItems];
     
-    contentFrame.origin.x = _showFromRight ? parentWidth - _width : 0;
-	CGRect blurFrame = (CGRect){ contentFrame.origin, { _width, self.view.bounds.size.height }};
-
-	RNBlurredView *blur = [[RNBlurredView alloc] initWithFrame:blurFrame];
-	blur.parentTarget = controller.view;
-	blur.blurRadius = 5;
-	blur.tintColor = self.tintColor;
-	blur.saturationDeltaFactor = 1.8;
-	blur.contentMode = _showFromRight ? UIViewContentModeTopRight : UIViewContentModeTopLeft;
-	[self.view insertSubview:blur belowSubview:self.contentView];
-	self.blurView = blur;
-
-	CGRect clipFrame = blurFrame;
-	clipFrame.origin.x = _showFromRight ? _width : 0;
-	clipFrame.size.width = 0;
-
-	UIView *clip = [[UIView alloc] initWithFrame:clipFrame];
-	clip.backgroundColor = [UIColor blackColor];
-	blur.layer.mask = clip.layer;
-	self.blurClipView = clip;
-    
-	clipFrame.origin.x = 0;
-	clipFrame.size.width = _width;
+    CGFloat parentWidth = self.view.bounds.size.width;
+    CGRect contentFrameBegin = (CGRect){ { _showFromRight ? parentWidth : -_width, 0 }, { _width, self.view.bounds.size.height }};
+    CGRect contentFrameEnd = (CGRect){ { _showFromRight ? parentWidth - _width : 0, 0 }, { _width, self.view.bounds.size.height }};
+	
+    self.contentView.frame = contentFrameBegin;
+	
+	self.blurView.parentTarget = controller.view;
+	self.blurView.frame = contentFrameEnd;
+	
+	self.blurClipView.frame = (CGRect){{ _showFromRight ? _width : 0, 0 }, { 0, contentFrameEnd.size.height }};
 
     [UIView animateWithDuration:self.animationDuration
                           delay:0
                         options:kNilOptions
                      animations:^{
-                         self.contentView.frame = contentFrame;
-						 self.blurClipView.frame = clipFrame;
+                         self.contentView.frame = contentFrameEnd;
+						 self.blurClipView.frame = self.blurView.bounds;
                      }
                      completion:^(BOOL finished) {
 						 [self endAppearanceTransition];
