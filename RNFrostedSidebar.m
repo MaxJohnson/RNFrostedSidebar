@@ -306,7 +306,7 @@ static RNFrostedSidebar *rn_frostedMenu;
 - (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration {
 	[super willRotateToInterfaceOrientation:toInterfaceOrientation duration:duration];
 
-	if ([self isViewLoaded] && self.view.window != nil) {
+	if (self.isViewLoaded && self.view.window != nil) {
 		[UIView animateWithDuration:duration/2 animations:^{
 			self.view.alpha = 0;
 		}];
@@ -316,14 +316,14 @@ static RNFrostedSidebar *rn_frostedMenu;
 - (void)willAnimateRotationToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration {
     [super willAnimateRotationToInterfaceOrientation:toInterfaceOrientation duration:duration];
     
-    if ([self isViewLoaded] && self.view.window != nil) {
-        [self layoutSubviews];
+    if (self.isViewLoaded && self.view.window != nil) {
+        [self.view setNeedsLayout];
     }
 }
 
 - (void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation
 {
-	if ([self isViewLoaded] && self.view.window != nil) {
+	if (self.isViewLoaded && self.view.window != nil) {
 		[UIView animateWithDuration:0.2 animations:^{
 			[self.blurView setNeedsDisplay];
 			self.view.alpha = 1;
@@ -545,7 +545,9 @@ static RNFrostedSidebar *rn_frostedMenu;
     }
 }
 
-- (void)layoutSubviews {
+- (void)viewDidLayoutSubviews {
+	[super viewDidLayoutSubviews];
+	
     CGFloat x = self.showFromRight ? self.parentViewController.view.bounds.size.width - _width : 0;
 	CGRect contentFrame = CGRectMake(x, 0, _width, self.parentViewController.view.bounds.size.height);;
 	self.contentView.frame = contentFrame;
