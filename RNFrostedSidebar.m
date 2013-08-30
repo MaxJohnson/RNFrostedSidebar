@@ -6,8 +6,6 @@
 //  Copyright (c) 2013 Ryan Nystrom. All rights reserved.
 //
 
-#define __IPHONE_OS_VERSION_SOFT_MAX_REQUIRED __IPHONE_7_0
-
 #import "RNFrostedSidebar.h"
 #import <QuartzCore/QuartzCore.h>
 #import <Accelerate/Accelerate.h>
@@ -405,7 +403,6 @@ static RNFrostedSidebar *rn_frostedMenu;
         view.originalBackgroundColor = self.itemBackgroundColor;
         view.layer.borderWidth = self.borderWidth;
         
-#if __IPHONE_OS_VERSION_SOFT_MAX_REQUIRED
         [UIView animateWithDuration:0.5
                               delay:(initDelay + idx*0.1f)
              usingSpringWithDamping:10
@@ -416,20 +413,6 @@ static RNFrostedSidebar *rn_frostedMenu;
                              view.alpha = 1;
                          }
                          completion:nil];
-#else
-        [UIView animateWithDuration:0.2
-                              delay:(initDelay + idx*0.1f)
-                            options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationCurveEaseInOut
-                         animations:^{
-                             view.layer.transform = CATransform3DMakeScale(1.1, 1.1, 1);
-                             view.alpha = 1;
-                         }
-                         completion:^(BOOL finished) {
-                             [UIView animateWithDuration:0.1 animations:^{
-                                 view.layer.transform = CATransform3DIdentity;
-                             }];
-                         }];
-#endif
     }];
 }
 
