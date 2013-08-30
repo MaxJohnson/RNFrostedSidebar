@@ -303,18 +303,32 @@ static RNFrostedSidebar *rn_frostedMenu;
     return UIInterfaceOrientationMaskAll;
 }
 
+- (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration {
+	[super willRotateToInterfaceOrientation:toInterfaceOrientation duration:duration];
+
+	if ([self isViewLoaded] && self.view.window != nil) {
+		[UIView animateWithDuration:duration/2 animations:^{
+			self.view.alpha = 0;
+		}];
+	}
+}
+
 - (void)willAnimateRotationToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration {
     [super willAnimateRotationToInterfaceOrientation:toInterfaceOrientation duration:duration];
     
     if ([self isViewLoaded] && self.view.window != nil) {
-        self.view.alpha = 0;
-        UIImage *blurImage = [self.parentViewController.view rn_screenshot];
-        blurImage = [blurImage applyBlurWithRadius:5 tintColor:self.tintColor saturationDeltaFactor:1.8 maskImage:nil];
-        self.blurView.image = blurImage;
-        self.view.alpha = 1;
-        
         [self layoutSubviews];
     }
+}
+
+- (void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation
+{
+	if ([self isViewLoaded] && self.view.window != nil) {
+		[UIView animateWithDuration:0.2 animations:^{
+			[self.blurView setNeedsDisplay];
+			self.view.alpha = 1;
+		}];
+	}
 }
 
 #pragma mark - Show
