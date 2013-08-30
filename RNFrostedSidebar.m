@@ -339,9 +339,19 @@ static RNFrostedSidebar *rn_frostedMenu;
     }
     
     rn_frostedMenu = self;
-    
-    [self rn_addToParentViewController:controller callingAppearanceMethods:YES];
+	
+	[self beginAppearanceTransition:YES animated:YES];
+	
+	if (self.parentViewController) {
+		[self willMoveToParentViewController:nil];
+		[self.view removeFromSuperview];
+		[self removeFromParentViewController];
+	}
+	
+	[controller addChildViewController:self];
     self.view.frame = controller.view.bounds;
+    [controller.view addSubview:self.view];
+    [self didMoveToParentViewController:controller];
     
     CGFloat parentWidth = self.view.bounds.size.width;
     
@@ -383,7 +393,9 @@ static RNFrostedSidebar *rn_frostedMenu;
                          self.contentView.frame = contentFrame;
 						 self.blurClipView.frame = clipFrame;
                      }
-                     completion:nil];
+                     completion:^(BOOL finished) {
+						 [self endAppearanceTransition];
+					 }];
     
     CGFloat initDelay = 0.1f;
     [self.itemViews enumerateObjectsUsingBlock:^(RNCalloutItemView *view, NSUInteger idx, BOOL *stop) {
@@ -439,8 +451,14 @@ static RNFrostedSidebar *rn_frostedMenu;
 }
 
 - (void)dismissAnimated:(BOOL)animated {
+	[self beginAppearanceTransition:NO animated:animated];
+	
     void (^completion)(BOOL) = ^(BOOL finished){
-        [self rn_removeFromParentViewControllerCallingAppearanceMethods:YES];
+        [self willMoveToParentViewController:nil];
+		[self.view removeFromSuperview];
+		[self removeFromParentViewController];
+		
+		[self endAppearanceTransition];
     };
     
     if (animated) {
@@ -581,26 +599,6 @@ static RNFrostedSidebar *rn_frostedMenu;
     }];
     
     return index;
-}
-
-- (void)rn_addToParentViewController:(UIViewController *)parentViewController callingAppearanceMethods:(BOOL)callAppearanceMethods {
-    if (self.parentViewController != nil) {
-        [self rn_removeFromParentViewControllerCallingAppearanceMethods:callAppearanceMethods];
-    }
-    
-    if (callAppearanceMethods) [self beginAppearanceTransition:YES animated:NO];
-    [parentViewController addChildViewController:self];
-    [parentViewController.view addSubview:self.view];
-    [self didMoveToParentViewController:self];
-    if (callAppearanceMethods) [self endAppearanceTransition];
-}
-
-- (void)rn_removeFromParentViewControllerCallingAppearanceMethods:(BOOL)callAppearanceMethods {    
-    if (callAppearanceMethods) [self beginAppearanceTransition:NO animated:NO];
-    [self willMoveToParentViewController:nil];
-    [self.view removeFromSuperview];
-    [self removeFromParentViewController];
-    if (callAppearanceMethods) [self endAppearanceTransition];
 }
 
 @end
