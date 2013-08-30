@@ -41,8 +41,6 @@
 	if (hasBlur || hasSaturationChange) {
 		UIGraphicsBeginImageContextWithOptions(rect.size, YES, 0);
         CGContextRef effectInContext = UIGraphicsGetCurrentContext();
-        CGContextScaleCTM(effectInContext, 1.0, -1.0);
-		CGContextTranslateCTM(effectInContext, 0, -rect.size.height);
 
 		[self.parentTarget drawViewHierarchyInRect:target afterScreenUpdates:YES];
         
@@ -128,7 +126,7 @@
 	}
 
 	if (hasBlur) {
-		CGContextDrawImage(outputContext, rect, effectImage.CGImage);
+		[effectImage drawInRect:rect];
 	}
 
     if (tintColor) {
