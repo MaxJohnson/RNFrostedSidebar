@@ -10,54 +10,41 @@
 
 #import "RNFrostedSidebar.h"
 #import <QuartzCore/QuartzCore.h>
+#import <Accelerate/Accelerate.h>
 
-#pragma mark - Categories
+#pragma mark - Private Classes
 
-@implementation UIView (rn_Screenshot)
+@interface RNBlurredView : UIView
 
-- (UIImage *)rn_screenshot {
-    UIGraphicsBeginImageContext(self.bounds.size);
-    [self.layer renderInContext:UIGraphicsGetCurrentContext()];
-    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    NSData *imageData = UIImageJPEGRepresentation(image, 0.75);
-    image = [UIImage imageWithData:imageData];
-    return image;
-}
+@property (nonatomic, strong) UIView *parentTarget;
+@property (nonatomic) CGFloat blurRadius;
+@property (nonatomic, strong) UIColor *tintColor;
+@property (nonatomic) CGFloat saturationDeltaFactor;
 
 @end
 
-#import <Accelerate/Accelerate.h>
+@implementation RNBlurredView
 
-@implementation UIImage (rn_Blur)
-
-- (UIImage *)applyBlurWithRadius:(CGFloat)blurRadius tintColor:(UIColor *)tintColor saturationDeltaFactor:(CGFloat)saturationDeltaFactor maskImage:(UIImage *)maskImage
+- (void)drawRect:(CGRect)rect
 {
-    // Check pre-conditions.
-    if (self.size.width < 1 || self.size.height < 1) {
-        NSLog (@"*** error: invalid size: (%.2f x %.2f). Both dimensions must be >= 1: %@", self.size.width, self.size.height, self);
-        return nil;
-    }
-    if (!self.CGImage) {
-        NSLog (@"*** error: image must be backed by a CGImage: %@", self);
-        return nil;
-    }
-    if (maskImage && !maskImage.CGImage) {
-        NSLog (@"*** error: maskImage must be backed by a CGImage: %@", maskImage);
-        return nil;
-    }
+	CGFloat blurRadius = self.blurRadius;
+	CGFloat saturationDeltaFactor = self.saturationDeltaFactor;
+	UIColor *tintColor = self.tintColor;
     
-    CGRect imageRect = { CGPointZero, self.size };
-    UIImage *effectImage = self;
-    
-    BOOL hasBlur = blurRadius > __FLT_EPSILON__;
+	CGRect target = [self.parentTarget convertRect:self.parentTarget.bounds toView:self];
+
+	// Draw effect image.
+	BOOL hasBlur = blurRadius > __FLT_EPSILON__;
     BOOL hasSaturationChange = fabs(saturationDeltaFactor - 1.) > __FLT_EPSILON__;
-    if (hasBlur || hasSaturationChange) {
-        UIGraphicsBeginImageContextWithOptions(self.size, NO, [[UIScreen mainScreen] scale]);
+
+	UIImage *effectImage = nil;
+	if (hasBlur || hasSaturationChange) {
+		UIGraphicsBeginImageContextWithOptions(rect.size, YES, 0);
         CGContextRef effectInContext = UIGraphicsGetCurrentContext();
         CGContextScaleCTM(effectInContext, 1.0, -1.0);
-        CGContextTranslateCTM(effectInContext, 0, -self.size.height);
-        CGContextDrawImage(effectInContext, imageRect, self.CGImage);
+		CGContextTranslateCTM(effectInContext, 0, -rect.size.height);
+
+		[self.parentTarget drawViewHierarchyInRect:target afterScreenUpdates:YES];
         
         vImage_Buffer effectInBuffer;
         effectInBuffer.data     = CGBitmapContextGetData(effectInContext);
@@ -65,7 +52,7 @@
         effectInBuffer.height   = CGBitmapContextGetHeight(effectInContext);
         effectInBuffer.rowBytes = CGBitmapContextGetBytesPerRow(effectInContext);
         
-        UIGraphicsBeginImageContextWithOptions(self.size, NO, [[UIScreen mainScreen] scale]);
+		UIGraphicsBeginImageContextWithOptions(rect.size, YES, 0);
         CGContextRef effectOutContext = UIGraphicsGetCurrentContext();
         vImage_Buffer effectOutBuffer;
         effectOutBuffer.data     = CGBitmapContextGetData(effectOutContext);
@@ -86,7 +73,7 @@
             //
             // ... if d is odd, use three box-blurs of size 'd', centered on the output pixel.
             //
-            CGFloat inputRadius = blurRadius * [[UIScreen mainScreen] scale];
+			CGFloat inputRadius = blurRadius * self.window.screen.scale;
             NSUInteger radius = floor(inputRadius * 3. * sqrt(2 * M_PI) / 4 + 0.5);
             if (radius % 2 != 1) {
                 radius += 1; // force radius to be odd so that the three box-blur methodology works.
@@ -95,29 +82,31 @@
             vImageBoxConvolve_ARGB8888(&effectOutBuffer, &effectInBuffer, NULL, 0, 0, radius, radius, 0, kvImageEdgeExtend);
             vImageBoxConvolve_ARGB8888(&effectInBuffer, &effectOutBuffer, NULL, 0, 0, radius, radius, 0, kvImageEdgeExtend);
         }
-        BOOL effectImageBuffersAreSwapped = NO;
+
+		BOOL effectImageBuffersAreSwapped = (hasSaturationChange && hasBlur);
+
         if (hasSaturationChange) {
             CGFloat s = saturationDeltaFactor;
-            CGFloat floatingPointSaturationMatrix[] = {
-                0.0722 + 0.9278 * s,  0.0722 - 0.0722 * s,  0.0722 - 0.0722 * s,  0,
-                0.7152 - 0.7152 * s,  0.7152 + 0.2848 * s,  0.7152 - 0.7152 * s,  0,
-                0.2126 - 0.2126 * s,  0.2126 - 0.2126 * s,  0.2126 + 0.7873 * s,  0,
-                0,                    0,                    0,  1,
+			const size_t size = 16;
+			CGFloat floatingPointSaturationMatrix[size] = {
+				0.0722 + 0.9278 * s,  0.0722 - 0.0722 * s,  0.0722 - 0.0722 * s, 0,
+				0.7152 - 0.7152 * s,  0.7152 + 0.2848 * s,  0.7152 - 0.7152 * s, 0,
+				0.2126 - 0.2126 * s,  0.2126 - 0.2126 * s,  0.2126 + 0.7873 * s, 0,
+				0,                    0,                    0,					 1,
             };
             const int32_t divisor = 256;
-            NSUInteger matrixSize = sizeof(floatingPointSaturationMatrix)/sizeof(floatingPointSaturationMatrix[0]);
-            int16_t saturationMatrix[matrixSize];
-            for (NSUInteger i = 0; i < matrixSize; ++i) {
+			int16_t saturationMatrix[size];
+			for (size_t i = 0; i < size; ++i) {
                 saturationMatrix[i] = (int16_t)roundf(floatingPointSaturationMatrix[i] * divisor);
             }
+
             if (hasBlur) {
                 vImageMatrixMultiply_ARGB8888(&effectOutBuffer, &effectInBuffer, saturationMatrix, divisor, NULL, NULL, kvImageNoFlags);
-                effectImageBuffersAreSwapped = YES;
-            }
-            else {
+			} else {
                 vImageMatrixMultiply_ARGB8888(&effectInBuffer, &effectOutBuffer, saturationMatrix, divisor, NULL, NULL, kvImageNoFlags);
             }
         }
+
         if (!effectImageBuffersAreSwapped)
             effectImage = UIGraphicsGetImageFromCurrentImageContext();
         UIGraphicsEndImageContext();
@@ -128,42 +117,28 @@
     }
     
     // Set up output context.
-    UIGraphicsBeginImageContextWithOptions(self.size, NO, [[UIScreen mainScreen] scale]);
     CGContextRef outputContext = UIGraphicsGetCurrentContext();
-    CGContextScaleCTM(outputContext, 1.0, -1.0);
-    CGContextTranslateCTM(outputContext, 0, -self.size.height);
-    
-    // Draw base image.
-    CGContextDrawImage(outputContext, imageRect, self.CGImage);
-    
-    // Draw effect image.
-    if (hasBlur) {
-        CGContextSaveGState(outputContext);
-        if (maskImage) {
-            CGContextClipToMask(outputContext, imageRect, maskImage.CGImage);
-        }
-        CGContextDrawImage(outputContext, imageRect, effectImage.CGImage);
-        CGContextRestoreGState(outputContext);
-    }
-    
-    // Add in color tint.
+
+	if (!hasBlur) {
+		[self.parentTarget drawViewHierarchyInRect:target afterScreenUpdates:YES];
+	}
+
+	if (tintColor) {
+		CGContextSaveGState(outputContext);
+	}
+
+	if (hasBlur) {
+		CGContextDrawImage(outputContext, rect, effectImage.CGImage);
+	}
+
     if (tintColor) {
-        CGContextSaveGState(outputContext);
         CGContextSetFillColorWithColor(outputContext, tintColor.CGColor);
-        CGContextFillRect(outputContext, imageRect);
-        CGContextRestoreGState(outputContext);
+		CGContextFillRect(outputContext, rect);
+		CGContextRestoreGState(outputContext);
     }
-    
-    // Output image is ready.
-    UIImage *outputImage = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    
-    return outputImage;
 }
 
 @end
-
-#pragma mark - Private Classes
 
 @interface RNCalloutItemView : UIView
 
@@ -232,8 +207,9 @@
 
 @interface RNFrostedSidebar ()
 
-@property (nonatomic, strong) UIImageView *blurView;
 @property (nonatomic, weak) UIScrollView *contentView;
+@property (nonatomic, weak) RNBlurredView *blurView;
+@property (nonatomic, strong) UIView *blurClipView;
 @property (nonatomic, strong) NSArray *images;
 @property (nonatomic, strong) NSArray *borderColors;
 @property (nonatomic, strong) NSMutableArray *itemViews;
@@ -350,9 +326,6 @@ static RNFrostedSidebar *rn_frostedMenu;
     
     rn_frostedMenu = self;
     
-    UIImage *blurImage = [controller.view rn_screenshot];
-    blurImage = [blurImage applyBlurWithRadius:5 tintColor:self.tintColor saturationDeltaFactor:1.8 maskImage:nil];
-    
     [self rn_addToParentViewController:controller callingAppearanceMethods:YES];
     self.view.frame = controller.view.bounds;
     
@@ -365,24 +338,36 @@ static RNFrostedSidebar *rn_frostedMenu;
     
     [self layoutItems];
     
-    CGRect blurFrame = CGRectMake(_showFromRight ? self.view.bounds.size.width : 0, 0, 0, self.view.bounds.size.height);
-    
-    self.blurView = [[UIImageView alloc] initWithImage:blurImage];
-    self.blurView.frame = blurFrame;
-    self.blurView.contentMode = _showFromRight ? UIViewContentModeTopRight : UIViewContentModeTopLeft;
-    self.blurView.clipsToBounds = YES;
-    [self.view insertSubview:self.blurView belowSubview:self.contentView];
-    
     contentFrame.origin.x = _showFromRight ? parentWidth - _width : 0;
-    blurFrame.origin.x = contentFrame.origin.x;
-    blurFrame.size.width = _width;
+	CGRect blurFrame = (CGRect){ contentFrame.origin, { _width, self.view.bounds.size.height }};
+
+	RNBlurredView *blur = [[RNBlurredView alloc] initWithFrame:blurFrame];
+	blur.parentTarget = controller.view;
+	blur.blurRadius = 5;
+	blur.tintColor = self.tintColor;
+	blur.saturationDeltaFactor = 1.8;
+	blur.contentMode = _showFromRight ? UIViewContentModeTopRight : UIViewContentModeTopLeft;
+	[self.view insertSubview:blur belowSubview:self.contentView];
+	self.blurView = blur;
+
+	CGRect clipFrame = blurFrame;
+	clipFrame.origin.x = _showFromRight ? _width : 0;
+	clipFrame.size.width = 0;
+
+	UIView *clip = [[UIView alloc] initWithFrame:clipFrame];
+	clip.backgroundColor = [UIColor blackColor];
+	blur.layer.mask = clip.layer;
+	self.blurClipView = clip;
     
+	clipFrame.origin.x = 0;
+	clipFrame.size.width = _width;
+
     [UIView animateWithDuration:self.animationDuration
                           delay:0
                         options:kNilOptions
                      animations:^{
                          self.contentView.frame = contentFrame;
-                         self.blurView.frame = blurFrame;
+						 self.blurClipView.frame = clipFrame;
                      }
                      completion:nil];
     
@@ -448,17 +433,17 @@ static RNFrostedSidebar *rn_frostedMenu;
         CGFloat parentWidth = self.view.bounds.size.width;
         CGRect contentFrame = self.contentView.frame;
         contentFrame.origin.x = self.showFromRight ? parentWidth : -_width;
-        
-        CGRect blurFrame = self.blurView.frame;
-        blurFrame.origin.x = self.showFromRight ? parentWidth : 0;
-        blurFrame.size.width = 0;
+
+		CGRect clipFrame = self.blurView.frame;
+		clipFrame.origin.x = self.showFromRight ? _width : 0;
+		clipFrame.size.width = 0;
         
         [UIView animateWithDuration:self.animationDuration
                               delay:0
                             options:UIViewAnimationOptionBeginFromCurrentState
                          animations:^{
                              self.contentView.frame = contentFrame;
-                             self.blurView.frame = blurFrame;
+							 self.blurClipView.frame = clipFrame;
                          }
                          completion:completion];
     }
@@ -548,8 +533,10 @@ static RNFrostedSidebar *rn_frostedMenu;
 
 - (void)layoutSubviews {
     CGFloat x = self.showFromRight ? self.parentViewController.view.bounds.size.width - _width : 0;
-    self.contentView.frame = CGRectMake(x, 0, _width, self.parentViewController.view.bounds.size.height);
-    self.blurView.frame = self.contentView.frame;
+	CGRect contentFrame = CGRectMake(x, 0, _width, self.parentViewController.view.bounds.size.height);;
+	self.contentView.frame = contentFrame;
+	self.blurView.frame = contentFrame;
+	self.blurClipView.frame = self.blurView.bounds;
     
     [self layoutItems];
 }
