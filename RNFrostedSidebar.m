@@ -232,9 +232,8 @@
 
 @interface RNFrostedSidebar ()
 
-@property (nonatomic, strong) UIScrollView *contentView;
 @property (nonatomic, strong) UIImageView *blurView;
-@property (nonatomic, strong) UITapGestureRecognizer *tapGesture;
+@property (nonatomic, weak) UIScrollView *contentView;
 @property (nonatomic, strong) NSArray *images;
 @property (nonatomic, strong) NSArray *borderColors;
 @property (nonatomic, strong) NSMutableArray *itemViews;
@@ -252,14 +251,6 @@ static RNFrostedSidebar *rn_frostedMenu;
 
 - (instancetype)initWithImages:(NSArray *)images selectedIndices:(NSIndexSet *)selectedIndices borderColors:(NSArray *)colors {
     if (self = [super init]) {
-        _contentView = [[UIScrollView alloc] init];
-        _contentView.alwaysBounceHorizontal = NO;
-        _contentView.alwaysBounceVertical = YES;
-        _contentView.bounces = YES;
-        _contentView.clipsToBounds = NO;
-        _contentView.showsHorizontalScrollIndicator = NO;
-        _contentView.showsVerticalScrollIndicator = NO;
-        
         _width = 150;
         _animationDuration = 0.25f;
         _itemSize = CGSizeMake(_width/2, _width/2);
@@ -275,24 +266,6 @@ static RNFrostedSidebar *rn_frostedMenu;
         _selectedIndices = [selectedIndices mutableCopy] ?: [NSMutableIndexSet indexSet];
         _borderColors = colors;
         _images = images;
-        
-        [_images enumerateObjectsUsingBlock:^(UIImage *image, NSUInteger idx, BOOL *stop) {
-            RNCalloutItemView *view = [[RNCalloutItemView alloc] init];
-            view.itemIndex = idx;
-            view.clipsToBounds = YES;
-            view.imageView.image = image;
-            [_contentView addSubview:view];
-            
-            [_itemViews addObject:view];
-            
-            if (_borderColors && _selectedIndices && [_selectedIndices containsIndex:idx]) {
-                UIColor *color = _borderColors[idx];
-                view.layer.borderColor = color.CGColor;
-            }
-            else {
-                view.layer.borderColor = [UIColor clearColor].CGColor;
-            }
-        }];
     }
     return self;
 }
@@ -310,12 +283,40 @@ static RNFrostedSidebar *rn_frostedMenu;
     return nil;
 }
 
-- (void)loadView {
-    [super loadView];
-    self.view.backgroundColor = [UIColor clearColor];
-    [self.view addSubview:self.contentView];
-    self.tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
-    [self.view addGestureRecognizer:self.tapGesture];
+- (void)viewDidLoad
+{
+	[super viewDidLoad];
+
+	UIScrollView *contentView = [[UIScrollView alloc] init];
+	contentView.alwaysBounceHorizontal = NO;
+	contentView.alwaysBounceVertical = YES;
+	contentView.bounces = YES;
+	contentView.clipsToBounds = NO;
+	contentView.showsHorizontalScrollIndicator = NO;
+	contentView.showsVerticalScrollIndicator = NO;
+	[self.view addSubview:contentView];
+	self.contentView = contentView;
+
+	[_images enumerateObjectsUsingBlock:^(UIImage *image, NSUInteger idx, BOOL *stop) {
+		RNCalloutItemView *view = [[RNCalloutItemView alloc] init];
+		view.itemIndex = idx;
+		view.clipsToBounds = YES;
+		view.imageView.image = image;
+		[_contentView addSubview:view];
+
+		[_itemViews addObject:view];
+
+		if (_borderColors && _selectedIndices && [_selectedIndices containsIndex:idx]) {
+			UIColor *color = _borderColors[idx];
+			view.layer.borderColor = color.CGColor;
+		}
+		else {
+			view.layer.borderColor = [UIColor clearColor].CGColor;
+		}
+	}];
+
+	UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
+	[self.view addGestureRecognizer:tap];
 }
 
 - (BOOL)shouldAutorotate {

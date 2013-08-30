@@ -25,22 +25,22 @@
 
 // The width of the sidebar
 // Default 150
-@property (nonatomic, assign) CGFloat width;
+@property (nonatomic) CGFloat width;
 
 // Access the view that contains the menu items
-@property (nonatomic, strong, readonly) UIScrollView *contentView;
+@property (nonatomic, weak, readonly) UIScrollView *contentView;
 
 // Toggle displaying the sidebar on the right side of the device
 // Default NO
-@property (nonatomic, assign) BOOL showFromRight;
+@property (nonatomic) BOOL showFromRight;
 
 // The duration of the show and hide animations
 // Default 0.25
-@property (nonatomic, assign) CGFloat animationDuration;
+@property (nonatomic) CGFloat animationDuration;
 
 // The dimension for each item view, not including padding
 // Default {75, 75}
-@property (nonatomic, assign) CGSize itemSize;
+@property (nonatomic) CGSize itemSize;
 
 // The color to tint the blur effect
 // Default white: 0.2, alpha: 0.73
@@ -53,7 +53,7 @@
 
 // The width of the colored border for selected item views
 // Default 2
-@property (nonatomic, assign) NSUInteger borderWidth;
+@property (nonatomic) NSUInteger borderWidth;
 
 // An optional delegate to respond to interaction events
 @property (nonatomic, weak) id <RNFrostedSidebarDelegate> delegate;
